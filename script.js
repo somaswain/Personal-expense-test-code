@@ -119,14 +119,6 @@ function deleteExpenseFromDB(id) {
   });
 }
 
-function putSalaryInDB(month, amount) {
-  return new Promise((resolve) => {
-    const tx = db.transaction("salaries", "readwrite");
-    tx.objectStore("salaries").put({ month, amount });
-    tx.oncomplete = () => resolve();
-  });
-}
-
 // ── Toggle Add Expense form ──
 function toggleAddExpense(){
   const container = document.getElementById("expenseFormContainer");
@@ -189,30 +181,38 @@ function fmt(dateStr){
 function createTable(data){
   if(!data.length) return `<p class="no-expenses">No expenses yet</p>`;
 
-  const rows = data.map(e => `
-    <tr id="row-${e.id}">
-      <td class="td-amount">₹${Number(e.amount).toLocaleString()}</td>
-      <td class="td-date">${fmt(e.date)}</td>
-      <td class="td-note" title="${e.note || ''}">${e.note || '—'}</td>
-      <td class="td-options">
-        <button class="options-trigger" onclick="toggleMenu('${e.id}', this, event)" aria-label="Options">⋯</button>
-      </td>
-    </tr>
-    <tr id="menu-row-${e.id}" class="${menuOpenForId === e.id ? '' : 'hidden'}">
-      <td colspan="4" class="inline-menu-cell">
-        <div class="inline-menu">
-          <button class="opt-edit" onclick="editExpense('${e.id}')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            Edit
-          </button>
-          <button class="opt-delete" onclick="deleteExpense('${e.id}')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-            Delete
-          </button>
-        </div>
-      </td>
-    </tr>
-  `).join("");
+  const rows = data.map(e => {
+    const isCC = e.paymentType === "CC";
+    const rowClass = isCC ? "row-cc" : "";
+    const amountText = isCC 
+      ? `₹${Number(e.amount).toLocaleString()} (CC)` 
+      : `₹${Number(e.amount).toLocaleString()}`;
+
+    return `
+      <tr id="row-${e.id}" class="${rowClass}">
+        <td class="td-amount">${amountText}</td>
+        <td class="td-date">${fmt(e.date)}</td>
+        <td class="td-note" title="${e.note || ''}">${e.note || '—'}</td>
+        <td class="td-options">
+          <button class="options-trigger" onclick="toggleMenu('${e.id}', this, event)" aria-label="Options">⋯</button>
+        </td>
+      </tr>
+      <tr id="menu-row-${e.id}" class="${menuOpenForId === e.id ? '' : 'hidden'}">
+        <td colspan="4" class="inline-menu-cell">
+          <div class="inline-menu">
+            <button class="opt-edit" onclick="editExpense('${e.id}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit
+            </button>
+            <button class="opt-delete" onclick="deleteExpense('${e.id}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              Delete
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
 
   return `
     <table class="expense-table">
@@ -256,6 +256,14 @@ function openSalaryModal(month, event){
 function closeSalaryModal(){
   document.getElementById("salaryModal").classList.add("hidden");
   salaryTargetMonth = null;
+}
+
+function putSalaryInDB(month, amount) {
+  return new Promise((resolve) => {
+    const tx = db.transaction("salaries", "readwrite");
+    tx.objectStore("salaries").put({ month, amount });
+    tx.oncomplete = () => resolve();
+  });
 }
 
 async function saveSalary(){
@@ -379,16 +387,17 @@ document.getElementById("expenseForm").addEventListener("submit", async (e) => {
   const amount = parseFloat(document.getElementById("amount").value);
   const date = document.getElementById("date").value;
   const person = document.getElementById("person").value;
+  const paymentType = document.getElementById("paymentType").value;
   const note = document.getElementById("note").value.trim();
 
   let entry;
   if(editingId) {
-    entry = { id: editingId, amount, date, person, note };
+    entry = { id: editingId, amount, date, person, paymentType, note };
     expenses = expenses.map(exp => exp.id === editingId ? entry : exp);
     editingId = null;
     document.querySelector(".save-btn").textContent = "Save Expense";
   } else {
-    entry = { id: Date.now().toString(), amount, date, person, note };
+    entry = { id: Date.now().toString(), amount, date, person, paymentType, note };
     expenses.push(entry);
   }
 
@@ -417,6 +426,7 @@ function editExpense(id){
   document.getElementById("date").value = exp.date;
   document.getElementById("date").classList.add("has-value");
   document.getElementById("person").value = exp.person;
+  document.getElementById("paymentType").value = exp.paymentType || "Money";
   document.getElementById("note").value = exp.note || "";
   
   document.querySelector(".save-btn").textContent = "Update Expense";
