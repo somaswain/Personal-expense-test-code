@@ -290,7 +290,11 @@ input[type="date"].has-value { color: var(--text-primary); }
   color: var(--text-muted);
   font-size: 13px;
   flex-shrink: 0;
-  transition: none;
+  transition: transform 0.2s ease;
+}
+
+.chevron.open {
+  transform: rotate(180deg);
 }
 
 /* ── Summary ── */
@@ -313,50 +317,29 @@ input[type="date"].has-value { color: var(--text-primary); }
   color: var(--text-primary);
 }
 
-.total-row span:last-child { font-variant-numeric: tabular-nums; }
-
-.divider {
-  height: 1px;
-  background: var(--border);
-  margin: 2px 0;
-}
-
 .remaining-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.remaining-row span:last-child {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  border-top: 1px dashed var(--border);
+  padding-top: 6px;
+  margin-top: 2px;
 }
 
 .pos { color: var(--green); }
 .neg { color: var(--red); }
 
-/* ── Section header ── */
+/* ── Section Header ── */
 .section-header {
-  margin-top: 14px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 10px 8px;
+  margin-top: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--text-secondary);
-  border: 1px solid var(--border);
-  user-select: none;
-  transition: background 0.15s ease;
 }
-
-.section-header:hover { background: var(--surface2); }
 
 /* ── Expense Table ── */
 .expense-table {
@@ -391,9 +374,17 @@ input[type="date"].has-value { color: var(--text-primary); }
   overflow: hidden;
 }
 
-.expense-table tr:last-child td { border-bottom: none; }
-.expense-table tbody tr { transition: background 0.1s ease; }
-.expense-table tbody tr:hover td { background: var(--surface2); }
+.expense-table tr:last-child td {
+  border-bottom: none;
+}
+
+.expense-table tbody tr {
+  transition: background 0.1s ease;
+}
+
+.expense-table tbody tr:hover td {
+  background: var(--surface2);
+}
 
 .td-amount {
   font-weight: 600;
@@ -439,77 +430,64 @@ input[type="date"].has-value { color: var(--text-primary); }
   color: var(--text-primary);
 }
 
+/* ── Inline Menu ── */
 .inline-menu-cell {
-  padding: 0 !important;
-  border-bottom: 1px solid var(--border);
+  padding: 4px 8px !important;
+  background: var(--bg);
 }
 
 .inline-menu {
   display: flex;
-  gap: 0;
-  background: var(--surface2);
+  gap: 12px;
+  justify-content: flex-end;
 }
 
 .inline-menu button {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 10px 12px;
-  border: none;
   background: none;
+  border: none;
   font-family: var(--font-body);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  color: var(--text-secondary);
-  transition: background 0.12s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
 }
 
-.inline-menu button:hover { background: var(--border); }
-.inline-menu .opt-edit { border-right: 1px solid var(--border); }
-.inline-menu .opt-edit svg { stroke: var(--text-secondary); }
-.inline-menu .opt-delete { color: var(--red); }
-.inline-menu .opt-delete svg { stroke: var(--red); }
+.opt-edit { color: var(--text-secondary); }
+.opt-edit:hover { background: var(--surface); color: var(--text-primary); }
+.opt-delete { color: var(--red); }
+.opt-delete:hover { background: #FCE8E6; }
 
-/* ── CC Highlight Tweaks ── */
-.expense-table tbody tr.cc-row td {
-  background-color: var(--amber-bg);
-}
-.expense-table tbody tr.cc-row:hover td {
-  background-color: #FEF3C7;
-}
-.expense-table tbody tr.cc-row .inline-menu {
-  background-color: #FEF3C7;
-}
-.expense-table tbody tr.cc-row .inline-menu button:hover {
-  background-color: #FDE68A;
-}
-.expense-table tbody tr.cc-row .inline-menu .opt-edit {
-  border-right: 1px solid #FCD34D;
+.no-expenses {
+  text-align: center;
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-style: italic;
 }
 
-/* ── Modal ── */
+/* ── Modal Overlay ── */
 .modal-overlay {
   position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.35);
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(26,25,22,0.4);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  z-index: 999;
-  backdrop-filter: blur(2px);
+  z-index: 10000;
+  padding: 16px;
 }
-
-.modal-overlay.hidden { display: none; }
 
 .modal-box {
   background: var(--surface);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 24px 20px 36px;
+  border-radius: var(--radius-lg);
+  padding: 20px;
   width: 100%;
-  max-width: 540px;
+  max-width: 360px;
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -523,12 +501,12 @@ input[type="date"].has-value { color: var(--text-primary); }
 
 .modal-header h3 {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 400;
 }
 
 .modal-close {
-  background: var(--surface2);
+  background: none;
   border: none;
   width: 30px;
   height: 30px;
@@ -572,38 +550,22 @@ input[type="date"].has-value { color: var(--text-primary); }
   font-weight: 500;
   cursor: pointer;
 }
-.save-salary-btn {
-  background: var(--accent);
-  color: white;
-}
-.cancel-salary-btn {
-  background: var(--surface2);
-  color: var(--text-secondary);
-}
 
-/* ── Empty state ── */
-.no-expenses {
-  padding: 12px 8px;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-style: italic;
-}
+.save-salary-btn { background: var(--accent); color: white; }
+.cancel-salary-btn { background: var(--surface2); color: var(--text-secondary); }
 
-.hidden { display: none !important; }
-
-/* ── Controls ── */
-.controls {
+/* ── Global Controls ── */
+.global-controls {
   display: flex;
   gap: 10px;
-  margin: 8px 0 20px;
+  margin-bottom: 14px;
 }
 
 .control-btn {
-  flex: 1;
-  padding: 11px 16px;
   background: var(--surface);
-  border: 1.5px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  padding: 8px 14px;
   font-family: var(--font-body);
   font-size: 13.5px;
   font-weight: 500;
@@ -648,39 +610,37 @@ input[type="date"].has-value { color: var(--text-primary); }
 
 .how-to-use h2 {
   font-family: var(--font-display);
+  font-size: 20px;
   font-weight: 400;
   margin-bottom: 14px;
-  font-size: 22px;
-  color: var(--text-primary);
 }
 
 .guide-item {
-  padding: 12px 0;
-  border-bottom: 1px solid #ececec;
+  margin-bottom: 12px;
 }
 
 .guide-item:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+  margin-bottom: 0;
 }
 
 .guide-item h3 {
   font-size: 14px;
-  margin-bottom: 4px;
   font-weight: 600;
   color: var(--text-primary);
+  margin-bottom: 2px;
 }
 
 .guide-item p {
+  font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.5;
-  font-size: 13.5px;
+  line-height: 1.4;
 }
 
 .app-footer {
   margin-top: 28px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 12.5px;
-  padding-bottom: 20px;
+  font-size: 12px;
 }
+
+.hidden { display: none !important; }

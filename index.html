@@ -12,7 +12,6 @@
 
 <div class="container">
 
-  <!-- Header -->
   <header class="app-header">
     <div class="header-top">
       <div>
@@ -31,12 +30,10 @@
     </div>
   </header>
 
-  <!-- Success Toast -->
   <div id="successToast" class="toast toast-success hidden">
     <span class="toast-icon">✦</span> Expense saved!
   </div>
 
-  <!-- Add Expense -->
   <div class="add-expense-wrapper">
     <button class="add-btn" id="addExpenseBtn" onclick="toggleAddExpense()">
       <span id="addBtnIcon">+</span> Add Expense
@@ -46,67 +43,39 @@
       <form id="expenseForm">
         <div class="form-row">
           <div class="form-group">
-            <label>Amount (₹)</label>
-            <input type="number" id="amount" placeholder="0" required>
+            <label for="amount">Amount (₹)</label>
+            <input type="number" id="amount" placeholder="0" required min="1">
           </div>
           <div class="form-group">
-            <label>Tag</label>
-            <select id="person" required>
-              <option value="">Select</option>
+            <label for="date">Date</label>
+            <input type="date" id="date" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="person">Profile</label>
+            <select id="person">
               <option value="Main">Main</option>
               <option value="Self">Self</option>
             </select>
           </div>
-        </div>
-
-        <div class="form-row">
           <div class="form-group">
-            <label>Category</label>
-            <select id="category" required>
-              <option value="">Select</option>
-              <option>Food</option>
-              <option>Travel</option>
-              <option>Shopping</option>
-              <option>Bills</option>
-              <option>Entertainment</option>
-              <option>Other</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Date</label>
-            <input type="text" id="date" placeholder="Select Date" onfocus="this.type='date'" required>
+            <label for="note">Note</label>
+            <input type="text" id="note" placeholder="What was it for?">
           </div>
         </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Type</label>
-            <select id="paymentType" required>
-              <option value="Money/Online">Money/Online</option>
-              <option value="Credit Card (cc)">Credit Card (cc)</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Note</label>
-            <input type="text" id="note" placeholder="Optional note…">
-          </div>
-        </div>
-
         <button type="submit" class="save-btn">Save Expense</button>
       </form>
     </div>
   </div>
 
-  <!-- Expand / Collapse Controls -->
-  <div class="controls">
-    <button onclick="expandAll()" class="control-btn">Expand All</button>
-    <button onclick="collapseAll()" class="control-btn">Collapse All</button>
+  <div class="global-controls">
+    <button class="control-btn" onclick="expandAll()">Expand All</button>
+    <button class="control-btn" onclick="collapseAll()">Collapse All</button>
   </div>
 
-  <!-- Monthly list -->
   <div id="monthlyContainer"></div>
 
-  <!-- How to Use -->
   <section class="how-to-use">
     <h2>How To Use</h2>
     <div class="guide-item">
@@ -128,12 +97,11 @@
   </section>
 
   <footer class="app-footer">
-    Expense Tracker • Version V21
+    Expense Tracker • Version V19
   </footer>
 
 </div>
 
-<!-- Salary Modal -->
 <div id="salaryModal" class="modal-overlay hidden">
   <div class="modal-box">
     <div class="modal-header">
