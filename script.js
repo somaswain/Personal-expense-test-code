@@ -48,9 +48,11 @@ function showToast(){
 
 // ── Date input colour ──
 const dateInput = document.getElementById("date");
-dateInput.addEventListener("change", () => {
-  dateInput.classList.toggle("has-value", !!dateInput.value);
-});
+if(dateInput) {
+  dateInput.addEventListener("change", () => {
+    dateInput.classList.toggle("has-value", !!dateInput.value);
+  });
+}
 
 // ── Group & sort months ──
 function groupByMonth(data){
@@ -62,7 +64,6 @@ function groupByMonth(data){
   });
 
   data.forEach(e => {
-    if (!e.date) return;
     const d     = new Date(e.date + "T00:00:00");
     const month = d.toLocaleString("default", { month:"long", year:"numeric" });
     if(!g[month]) g[month] = [];
@@ -71,22 +72,16 @@ function groupByMonth(data){
   return g;
 }
 
-// FIXED: Safari-safe numerical month sorting function to prevent screen blanking on iPhone
 function sortedMonths(grouped){
   return Object.keys(grouped).sort((a,b) => {
     const [am, ay] = a.split(" ");
     const [bm, by] = b.split(" ");
-    
-    const bMonthIndex = new Date(Date.parse(bm + " 1, 2024")).getMonth();
-    const aMonthIndex = new Date(Date.parse(am + " 1, 2024")).getMonth();
-    
-    // Construct real chronological dates purely with integers (Safari compliant)
-    return new Date(Number(by), bMonthIndex, 1) - new Date(Number(ay), aMonthIndex, 1);
+    return new Date(`${by}-${new Date(Date.parse(bm + " 1, 2024")).getMonth()+1}-01`)
+      - new Date(`${ay}-${new Date(Date.parse(am + " 1, 2024")).getMonth()+1}-01`);
   });
 }
 
 function fmt(dateStr){
-  if (!dateStr) return "—";
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-IN", { day:"2-digit", month:"short" });
 }
@@ -95,21 +90,16 @@ function fmt(dateStr){
 function createTable(data){
   if(!data.length) return `<p class="no-expenses">No expenses yet</p>`;
 
-  const rows = data.map(e => {
-    const isCC = e.paymentType === "Credit Card (cc)";
-    const rowClass = isCC ? "cc-row" : "";
-    const amountDisplay = `₹${Number(e.amount).toLocaleString()}${isCC ? ' (cc)' : ''}`;
-
-    return `
-    <tr id="row-${e.id}" class="${rowClass}">
-      <td class="td-amount">${amountDisplay}</td>
+  const rows = data.map(e => `
+    <tr id="row-${e.id}">
+      <td class="td-amount">₹${Number(e.amount).toLocaleString()}</td>
       <td class="td-date">${fmt(e.date)}</td>
       <td class="td-note" title="${e.note || ''}">${e.note || '—'}</td>
       <td class="td-options">
         <button class="options-trigger" onclick="toggleMenu('${e.id}', this, event)" aria-label="Options">⋯</button>
       </td>
     </tr>
-    <tr id="menu-row-${e.id}" class="${menuOpenForId === e.id ? '' : 'hidden'} ${rowClass}">
+    <tr id="menu-row-${e.id}" class="${menuOpenForId === e.id ? '' : 'hidden'}">
       <td colspan="4" class="inline-menu-cell">
         <div class="inline-menu">
           <button class="opt-edit" onclick="editExpense('${e.id}')">
@@ -123,8 +113,7 @@ function createTable(data){
         </div>
       </td>
     </tr>
-  `;
-  }).join("");
+  `).join("");
 
   return `
     <table class="expense-table">
@@ -204,24 +193,19 @@ function renderExpenses(autoExpandMonth, autoExpandSection){
     const selfTotal  = self.reduce((s,e) => s + Number(e.amount), 0);
     const grandTotal = mainTotal + selfTotal;
 
-    const monthId   = month.replace(/\s/g,"");
-    const salary    = salaries[month];
-    const remaining = salary !== undefined ? salary - grandTotal : null;
-    const hasSalary = salary !== undefined;
-
+    const monthId = month.replace(/\s/g, "");
     const monthShouldOpen = openSectionIds.has(monthId);
-    const mainOpen        = openSectionIds.has(monthId + "-main");
-    const selfOpen        = openSectionIds.has(monthId + "-self");
+    const mainOpen = openSectionIds.has(monthId + "-main");
+    const selfOpen = openSectionIds.has(monthId + "-self");
 
-    const remainingHTML = remaining !== null ? `
-      <div class="divider"></div>
-      <div class="remaining-row">
-        <span>Salary</span>
-        <span>₹${Number(salary).toLocaleString()}</span>
-      </div>
-      <div class="remaining-row">
+    const hasSalary = salaries[month] !== undefined;
+    const salaryVal = hasSalary ? salaries[month] : 0;
+    const remaining = salaryVal - grandTotal;
+
+    const remainingHTML = hasSalary ? `
+      <div class="total-row remaining-row">
         <span>Remaining</span>
-        <span class="${remaining >= 0 ? 'pos' : 'neg'}">
+        <span class="${remaining < 0 ? 'neg' : 'pos'}">
           ${remaining < 0 ? '−' : ''}₹${Math.abs(remaining).toLocaleString()}
         </span>
       </div>
@@ -229,7 +213,6 @@ function renderExpenses(autoExpandMonth, autoExpandSection){
 
     const card = document.createElement("div");
     card.className = "month-card";
-
     const monthBodyClass = monthShouldOpen ? "" : "hidden";
     const chevText = monthShouldOpen ? "▴" : "▾";
     const chevClass = monthShouldOpen ? "chevron open" : "chevron";
@@ -238,25 +221,20 @@ function renderExpenses(autoExpandMonth, autoExpandSection){
       <div class="month-header" onclick="toggleSection('${monthId}')">
         <div class="month-header-left">
           <span class="month-title">
-            ${month} 
-            ${deleteMonthBtn(month)}
+            ${month} ${deleteMonthBtn(month)}
           </span>
-          <button
-            class="salary-tag ${hasSalary ? 'salary-tag-set' : 'salary-tag-add'}"
-            onclick="openSalaryModal('${month}', event)">
+          <button class="salary-tag ${hasSalary ? 'salary-tag-set' : 'salary-tag-add'}" onclick="openSalaryModal('${month}', event)">
             ${hasSalary ? '✎ Salary' : '+ Salary'}
           </button>
         </div>
         <span class="${chevClass}" id="chev-${monthId}">${chevText}</span>
       </div>
-
       <div id="${monthId}" class="${monthBodyClass}">
         <div class="summary-block">
           <div class="total-row"><span>Main</span><span>₹${mainTotal.toLocaleString()}</span></div>
           <div class="total-row"><span>Self</span><span>₹${selfTotal.toLocaleString()}</span></div>
           ${remainingHTML}
         </div>
-
         <div class="section-header" onclick="toggleSection('${monthId}-main', event)">
           <span>Main Expenses</span>
           <span class="${mainOpen ? 'chevron open' : 'chevron'}" id="chev-${monthId}-main">${mainOpen ? '▴' : '▾'}</span>
@@ -264,7 +242,6 @@ function renderExpenses(autoExpandMonth, autoExpandSection){
         <div id="${monthId}-main" class="${mainOpen ? '' : 'hidden'}">
           ${createTable(main)}
         </div>
-
         <div class="section-header" onclick="toggleSection('${monthId}-self', event)">
           <span>Self Expenses</span>
           <span class="${selfOpen ? 'chevron open' : 'chevron'}" id="chev-${monthId}-self">${selfOpen ? '▴' : '▾'}</span>
@@ -274,7 +251,6 @@ function renderExpenses(autoExpandMonth, autoExpandSection){
         </div>
       </div>
     `;
-
     container.appendChild(card);
   });
 }
@@ -284,107 +260,94 @@ function toggleSection(id, event){
   const el = document.getElementById(id);
   if(!el) return;
   
-  const nowHidden = el.classList.toggle("hidden");
-  
-  const chev = document.getElementById("chev-" + id);
-  if(chev){
-    chev.textContent = nowHidden ? "▾" : "▴";
-    chev.classList.toggle("open", !nowHidden);
-  }
-
-  if(nowHidden){
+  if(openSectionIds.has(id)){
     openSectionIds.delete(id);
+    el.classList.add("hidden");
+    const chev = document.getElementById("chev-" + id);
+    if(chev) { chev.textContent = "▾"; chev.classList.remove("open"); }
   } else {
     openSectionIds.add(id);
+    el.classList.remove("hidden");
+    const chev = document.getElementById("chev-" + id);
+    if(chev) { chev.textContent = "▴"; chev.classList.add("open"); }
   }
 }
 
-// ── CRUD ──
-function deleteExpense(id){
-  menuOpenForId = null;
-  expenses = expenses.filter(e => e.id !== id);
-  saveExpenses();
-  renderExpenses();
-}
-
-function editExpense(id){
-  menuOpenForId = null;
-  const e = expenses.find(x => x.id === id);
-  if(!e) return;
-  editingId = id;
-
-  document.getElementById("amount").value   = e.amount;
-  document.getElementById("person").value   = e.person;
-  document.getElementById("category").value = e.category;
-  document.getElementById("note").value     = e.note || "";
-  document.getElementById("date").value     = e.date;
-  document.getElementById("paymentType").value = e.paymentType || "Money/Online";
-  dateInput.classList.add("has-value");
-
-  const fc = document.getElementById("expenseFormContainer");
-  fc.classList.remove("hidden");
-  formOpen = true;
-  document.getElementById("addBtnIcon").textContent = "−";
-  document.getElementById("addExpenseBtn").style.borderRadius = "16px 16px 0 0";
-
-  window.scrollTo({ top:0, behavior:"smooth" });
-}
-
+// ── Submit Form ──
 document.getElementById("expenseForm").addEventListener("submit", (e) => {
   e.preventDefault();
+  const amount = parseFloat(document.getElementById("amount").value);
+  const date = document.getElementById("date").value;
+  const person = document.getElementById("person").value;
+  const note = document.getElementById("note").value.trim();
 
-  const personVal = document.getElementById("person").value;
-  const dateVal   = document.getElementById("date").value;
-
-  const data = {
-    id:          editingId || Date.now().toString(),
-    amount:      document.getElementById("amount").value,
-    person:      personVal,
-    category:    document.getElementById("category").value,
-    note:        document.getElementById("note").value,
-    date:        dateVal,
-    paymentType: document.getElementById("paymentType").value
-  };
-
-  const isNew = !editingId;
-
-  if(editingId){
-    expenses = expenses.map(x => x.id === editingId ? data : x);
+  if(editingId) {
+    expenses = expenses.map(exp => exp.id === editingId ? { id: editingId, amount, date, person, note } : exp);
     editingId = null;
+    document.querySelector(".save-btn").textContent = "Save Expense";
   } else {
-    expenses.push(data);
+    const newExp = { id: Date.now().toString(), amount, date, person, note };
+    expenses.push(newExp);
   }
 
   saveExpenses();
-
-  const d         = new Date(dateVal + "T00:00:00");
-  const monthName = d.toLocaleString("default", { month:"long", year:"numeric" });
-  const section   = personVal === "Main" ? "main" : "self";
-
+  const d = new Date(date + "T00:00:00");
+  const monthName = d.toLocaleString("default", { month: "long", year: "numeric" });
+  const section = person === "Main" ? "main" : "self";
+  
   menuOpenForId = null;
   renderExpenses(monthName, section);
-
   e.target.reset();
   dateInput.classList.remove("has-value");
-
-  if(isNew) showToast();
-
+  showToast();
   document.getElementById("expenseFormContainer").classList.add("hidden");
   formOpen = false;
   document.getElementById("addBtnIcon").textContent = "+";
   document.getElementById("addExpenseBtn").style.borderRadius = "16px";
 });
 
-// ── Export / Import ──
-function exportData(){
-  const payload = { exportedAt: new Date().toISOString(), expenses, salaries };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = `expense-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+function editExpense(id){
+  const exp = expenses.find(e => e.id === id);
+  if(!exp) return;
+  editingId = id;
+  document.getElementById("amount").value = exp.amount;
+  document.getElementById("date").value = exp.date;
+  document.getElementById("date").classList.add("has-value");
+  document.getElementById("person").value = exp.person;
+  document.getElementById("note").value = exp.note || "";
+  
+  document.querySelector(".save-btn").textContent = "Update Expense";
+  if(!formOpen) toggleAddExpense();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function deleteExpense(id){
+  if(!confirm("Delete this expense?")) return;
+  expenses = expenses.filter(e => e.id !== id);
+  saveExpenses();
+  renderExpenses();
+}
+
+function deleteMonth(month){
+  const confirmDelete = confirm(`Delete all expenses for ${month}?`);
+  if(!confirmDelete) return;
+
+  expenses = expenses.filter(exp => {
+    const expDate = new Date(exp.date + "T00:00:00");
+    const expMonth = expDate.toLocaleString("default", { month:"long", year:"numeric" });
+    return expMonth !== month;
+  });
+
+  delete salaries[month];
+  localStorage.setItem("expenses", JSON.stringify(expenses));
+  localStorage.setItem("salaries", JSON.stringify(salaries));
+
+  const mId = month.replace(/\s/g, "");
+  openSectionIds.delete(mId);
+  openSectionIds.delete(mId + "-main");
+  openSectionIds.delete(mId + "-self");
+
+  renderExpenses();
 }
 
 function triggerImport(){
@@ -395,14 +358,14 @@ function importData(event){
   const file = event.target.files[0];
   if(!file) return;
   const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      if(!Array.isArray(data.expenses)){ alert("Invalid backup file."); return; }
-      if(!confirm(`Import ${data.expenses.length} expense(s)?\nMerges with existing data (duplicates skipped).`)) return;
-      const existingIds = new Set(expenses.map(x => x.id));
-      const newOnes = data.expenses.filter(x => !existingIds.has(x.id));
-      expenses = [...expenses, ...newOnes];
+  reader.onload = function(e){
+    try{
+      const data = JSON.parse(e.target.result);
+      if(data.expenses && Array.isArray(data.expenses)){
+        const existingIds = new Set(expenses.map(x => x.id));
+        const newOnes = data.expenses.filter(x => !existingIds.has(x.id));
+        expenses = [...expenses, ...newOnes];
+      }
       if(data.salaries && typeof data.salaries === "object"){
         salaries = { ...salaries, ...data.salaries };
       }
@@ -432,33 +395,6 @@ function expandAll() {
 
 function collapseAll() {
   openSectionIds.clear();
-  renderExpenses();
-}
-
-function deleteMonth(month){
-  const confirmDelete = confirm(`Delete all expenses for ${month}?`);
-
-  if(!confirmDelete) return;
-
-  expenses = expenses.filter(exp => {
-    if (!exp.date) return true;
-    const expDate = new Date(exp.date + "T00:00:00");
-    const expMonth = expDate.toLocaleString("default", {
-      month:"long",
-      year:"numeric"
-    });
-    return expMonth !== month;
-  });
-
-  delete salaries[month];
-  localStorage.setItem("expenses", JSON.stringify(expenses));
-  localStorage.setItem("salaries", JSON.stringify(salaries));
-
-  const mId = month.replace(/\s/g,"");
-  openSectionIds.delete(mId);
-  openSectionIds.delete(mId + "-main");
-  openSectionIds.delete(mId + "-self");
-
   renderExpenses();
 }
 
