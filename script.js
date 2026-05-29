@@ -21,7 +21,7 @@ let salaries       = JSON.parse(localStorage.getItem("salaries"))  || {};
 let editingId      = null;
 let formOpen       = false;
 let menuOpenForId  = null;
-let openSectionIds = new Set(); // FIXED: Keeps track of open sections across renders
+let openSectionIds = new Set(); // Keeps track of open sections across renders
 
 // ── Persistence ──
 function saveExpenses(){ localStorage.setItem("expenses", JSON.stringify(expenses)); }
@@ -62,6 +62,7 @@ function groupByMonth(data){
   });
 
   data.forEach(e => {
+    if (!e.date) return;
     const d     = new Date(e.date + "T00:00:00");
     const month = d.toLocaleString("default", { month:"long", year:"numeric" });
     if(!g[month]) g[month] = [];
@@ -70,16 +71,22 @@ function groupByMonth(data){
   return g;
 }
 
+// FIXED: Safari-safe numerical month sorting function to prevent screen blanking on iPhone
 function sortedMonths(grouped){
   return Object.keys(grouped).sort((a,b) => {
     const [am, ay] = a.split(" ");
     const [bm, by] = b.split(" ");
-    return new Date(`${by}-${new Date(Date.parse(bm + " 1, 2024")).getMonth()+1}-01`)
-      - new Date(`${ay}-${new Date(Date.parse(am + " 1, 2024")).getMonth()+1}-01`);
+    
+    const bMonthIndex = new Date(Date.parse(bm + " 1, 2024")).getMonth();
+    const aMonthIndex = new Date(Date.parse(am + " 1, 2024")).getMonth();
+    
+    // Construct real chronological dates purely with integers (Safari compliant)
+    return new Date(Number(by), bMonthIndex, 1) - new Date(Number(ay), aMonthIndex, 1);
   });
 }
 
 function fmt(dateStr){
+  if (!dateStr) return "—";
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-IN", { day:"2-digit", month:"short" });
 }
@@ -169,14 +176,13 @@ function saveSalary(){
   salaries[salaryTargetMonth] = val;
   saveSalaries();
   closeSalaryModal();
-  renderExpenses(); // Dropdowns will remain open natively via openSectionIds
+  renderExpenses();
 }
 
 // ── Render ──
 function renderExpenses(autoExpandMonth, autoExpandSection){
   const container = document.getElementById("monthlyContainer");
 
-  // Track the newly added expense expansion so it survives the innerHTML wipe
   if(autoExpandMonth){
     const mId = autoExpandMonth.replace(/\s/g,"");
     openSectionIds.add(mId);
@@ -203,7 +209,6 @@ function renderExpenses(autoExpandMonth, autoExpandSection){
     const remaining = salary !== undefined ? salary - grandTotal : null;
     const hasSalary = salary !== undefined;
 
-    // Use our global Set to determine state
     const monthShouldOpen = openSectionIds.has(monthId);
     const mainOpen        = openSectionIds.has(monthId + "-main");
     const selfOpen        = openSectionIds.has(monthId + "-self");
@@ -287,7 +292,6 @@ function toggleSection(id, event){
     chev.classList.toggle("open", !nowHidden);
   }
 
-  // Record state to persist across renders
   if(nowHidden){
     openSectionIds.delete(id);
   } else {
@@ -300,7 +304,7 @@ function deleteExpense(id){
   menuOpenForId = null;
   expenses = expenses.filter(e => e.id !== id);
   saveExpenses();
-  renderExpenses(); // Dropdowns stay open since state is saved
+  renderExpenses();
 }
 
 function editExpense(id){
@@ -383,7 +387,6 @@ function exportData(){
   URL.revokeObjectURL(url);
 }
 
-// ── Trigger Import ──
 function triggerImport(){
   document.getElementById("importFile").click();
 }
@@ -438,6 +441,7 @@ function deleteMonth(month){
   if(!confirmDelete) return;
 
   expenses = expenses.filter(exp => {
+    if (!exp.date) return true;
     const expDate = new Date(exp.date + "T00:00:00");
     const expMonth = expDate.toLocaleString("default", {
       month:"long",
@@ -450,7 +454,6 @@ function deleteMonth(month){
   localStorage.setItem("expenses", JSON.stringify(expenses));
   localStorage.setItem("salaries", JSON.stringify(salaries));
 
-  // Purge deleted month from open tracking set
   const mId = month.replace(/\s/g,"");
   openSectionIds.delete(mId);
   openSectionIds.delete(mId + "-main");
