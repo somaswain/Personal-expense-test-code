@@ -15,17 +15,117 @@ function parseMonthYear(monthString){
   return new Date(Number(year), monthIndex, 1);
 }
 
-// ── State ──
-let expenses       = JSON.parse(localStorage.getItem("expenses"))  || [];
-let salaries       = JSON.parse(localStorage.getItem("salaries"))  || {};
+// ── State Cache ──
+let expenses       = [];
+let salaries       = {};
 let editingId      = null;
 let formOpen       = false;
 let menuOpenForId  = null;
-let openSectionIds = new Set(); // Keeps track of open sections across renders
+let openSectionIds = new Set(); 
 
-// ── Persistence ──
-function saveExpenses(){ localStorage.setItem("expenses", JSON.stringify(expenses)); }
-function saveSalaries(){ localStorage.setItem("salaries", JSON.stringify(salaries)); }
+// ── IndexedDB Database Core Architecture ──
+const DB_NAME = "ExpenseTrackerDB";
+const DB_VERSION = 1;
+let db;
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = (event) => {
+      const dbInstance = event.target.result;
+      if (!dbInstance.objectStoreNames.contains("expenses")) {
+        dbInstance.createObjectStore("expenses", { keyPath: "id" });
+      }
+      if (!dbInstance.objectStoreNames.contains("salaries")) {
+        dbInstance.createObjectStore("salaries", { keyPath: "month" });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      db = event.target.result;
+      resolve(db);
+    };
+
+    request.onerror = (event) => {
+      reject("IndexedDB failed to initialize: " + event.target.errorCode);
+    };
+  });
+}
+
+// Seamless baseline transition from Legacy localStorage data
+async function migrateFromLocalStorage() {
+  const legacyExpenses = localStorage.getItem("expenses");
+  const legacySalaries = localStorage.getItem("salaries");
+
+  if (legacyExpenses || legacySalaries) {
+    const parsedExpenses = JSON.parse(legacyExpenses) || [];
+    const parsedSalaries = JSON.parse(legacySalaries) || {};
+
+    const tx = db.transaction(["expenses", "salaries"], "readwrite");
+    const expStore = tx.objectStore("expenses");
+    const salStore = tx.objectStore("salaries");
+
+    parsedExpenses.forEach(exp => expStore.put(exp));
+    Object.keys(parsedSalaries).forEach(month => {
+      salStore.put({ month, amount: parsedSalaries[month] });
+    });
+
+    await new Promise((resolve) => tx.oncomplete = resolve);
+
+    localStorage.removeItem("expenses");
+    localStorage.removeItem("salaries");
+    console.log("Successfully migrated legacy data to IndexedDB.");
+  }
+}
+
+function loadDataFromDB() {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["expenses", "salaries"], "readonly");
+    const expenseStore = transaction.objectStore("expenses");
+    const salaryStore = transaction.objectStore("salaries");
+
+    const getAllExpenses = expenseStore.getAll();
+    const getAllSalaries = salaryStore.getAll();
+
+    transaction.oncomplete = () => {
+      expenses = getAllExpenses.result || [];
+      salaries = {};
+      if (getAllSalaries.result) {
+        getAllSalaries.result.forEach(item => {
+          salaries[item.month] = item.amount;
+        });
+      }
+      resolve();
+    };
+
+    transaction.onerror = () => reject("Error pulling runtime state data from DB.");
+  });
+}
+
+function putExpenseInDB(expense) {
+  return new Promise((resolve) => {
+    const tx = db.transaction("expenses", "readwrite");
+    tx.objectStore("expenses").put(expense);
+    tx.oncomplete = () => resolve();
+  });
+}
+
+function deleteExpenseFromDB(id) {
+  return new Promise((resolve) => {
+    const tx = db.transaction("expenses", "readwrite");
+    tx.objectStore("expenses").delete(id);
+    tx.oncomplete = () => resolve();
+  });
+}
+
+function putSalaryInDB(month, amount) {
+  return new Promise((resolve) => {
+    const tx = db.transaction("salaries", "readwrite");
+    tx.objectStore("salaries").put({ month, amount });
+    tx.oncomplete = () => resolve();
+  });
+}
 
 // ── Toggle Add Expense form ──
 function toggleAddExpense(){
@@ -58,7 +158,6 @@ if(dateInput) {
 function groupByMonth(data){
   const g = {};
   
-  // Initialize any months that have a salary attached so they remain visible even if empty
   Object.keys(salaries).forEach(month => {
     g[month] = [];
   });
@@ -159,11 +258,12 @@ function closeSalaryModal(){
   salaryTargetMonth = null;
 }
 
-function saveSalary(){
+async function saveSalary(){
   const val = parseFloat(document.getElementById("salaryInput").value);
   if(isNaN(val) || val <= 0){ alert("Enter a valid salary."); return; }
   salaries[salaryTargetMonth] = val;
-  saveSalaries();
+  
+  await putSalaryInDB(salaryTargetMonth, val);
   closeSalaryModal();
   renderExpenses();
 }
@@ -274,23 +374,26 @@ function toggleSection(id, event){
 }
 
 // ── Submit Form ──
-document.getElementById("expenseForm").addEventListener("submit", (e) => {
+document.getElementById("expenseForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const amount = parseFloat(document.getElementById("amount").value);
   const date = document.getElementById("date").value;
   const person = document.getElementById("person").value;
   const note = document.getElementById("note").value.trim();
 
+  let entry;
   if(editingId) {
-    expenses = expenses.map(exp => exp.id === editingId ? { id: editingId, amount, date, person, note } : exp);
+    entry = { id: editingId, amount, date, person, note };
+    expenses = expenses.map(exp => exp.id === editingId ? entry : exp);
     editingId = null;
     document.querySelector(".save-btn").textContent = "Save Expense";
   } else {
-    const newExp = { id: Date.now().toString(), amount, date, person, note };
-    expenses.push(newExp);
+    entry = { id: Date.now().toString(), amount, date, person, note };
+    expenses.push(entry);
   }
 
-  saveExpenses();
+  await putExpenseInDB(entry);
+
   const d = new Date(date + "T00:00:00");
   const monthName = d.toLocaleString("default", { month: "long", year: "numeric" });
   const section = person === "Main" ? "main" : "self";
@@ -321,26 +424,32 @@ function editExpense(id){
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function deleteExpense(id){
+async function deleteExpense(id){
   if(!confirm("Delete this expense?")) return;
   expenses = expenses.filter(e => e.id !== id);
-  saveExpenses();
+  
+  await deleteExpenseFromDB(id);
   renderExpenses();
 }
 
-function deleteMonth(month){
+async function deleteMonth(month){
   const confirmDelete = confirm(`Delete all expenses for ${month}?`);
   if(!confirmDelete) return;
 
-  expenses = expenses.filter(exp => {
+  const recordsToRemove = expenses.filter(exp => {
     const expDate = new Date(exp.date + "T00:00:00");
     const expMonth = expDate.toLocaleString("default", { month:"long", year:"numeric" });
-    return expMonth !== month;
+    return expMonth === month;
   });
 
+  expenses = expenses.filter(exp => !recordsToRemove.includes(exp));
   delete salaries[month];
-  localStorage.setItem("expenses", JSON.stringify(expenses));
-  localStorage.setItem("salaries", JSON.stringify(salaries));
+
+  const tx = db.transaction(["expenses", "salaries"], "readwrite");
+  recordsToRemove.forEach(exp => tx.objectStore("expenses").delete(exp.id));
+  tx.objectStore("salaries").delete(month);
+  
+  await new Promise(resolve => tx.oncomplete = resolve);
 
   const mId = month.replace(/\s/g, "");
   openSectionIds.delete(mId);
@@ -348,6 +457,18 @@ function deleteMonth(month){
   openSectionIds.delete(mId + "-self");
 
   renderExpenses();
+}
+
+// ── Export Backup ──
+function exportData() {
+  const backupObject = { expenses, salaries };
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupObject));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `expense_tracker_backup_${Date.now()}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
 }
 
 function triggerImport(){
@@ -358,21 +479,32 @@ function importData(event){
   const file = event.target.files[0];
   if(!file) return;
   const reader = new FileReader();
-  reader.onload = function(e){
+  reader.onload = async function(e){
     try{
       const data = JSON.parse(e.target.result);
+      let incomingNewExpensesCount = 0;
+      
+      const tx = db.transaction(["expenses", "salaries"], "readwrite");
+      const expStore = tx.objectStore("expenses");
+      const salStore = tx.objectStore("salaries");
+
       if(data.expenses && Array.isArray(data.expenses)){
         const existingIds = new Set(expenses.map(x => x.id));
         const newOnes = data.expenses.filter(x => !existingIds.has(x.id));
+        newOnes.forEach(x => expStore.put(x));
         expenses = [...expenses, ...newOnes];
+        incomingNewExpensesCount = newOnes.length;
       }
       if(data.salaries && typeof data.salaries === "object"){
         salaries = { ...salaries, ...data.salaries };
+        Object.keys(data.salaries).forEach(month => {
+          salStore.put({ month, amount: data.salaries[month] });
+        });
       }
-      saveExpenses();
-      saveSalaries();
+      
+      await new Promise(resolve => tx.oncomplete = resolve);
       renderExpenses();
-      alert(`✅ Imported ${newOnes.length} new expense(s)!`);
+      alert(`✅ Imported ${incomingNewExpensesCount} new expense(s)!`);
     } catch(err){
       alert("Failed to read file. Make sure it's a valid backup JSON.");
     }
@@ -398,5 +530,9 @@ function collapseAll() {
   renderExpenses();
 }
 
-// ── Init ──
-renderExpenses();
+// ── Initialization Hook Pipeline ──
+initDB()
+  .then(() => migrateFromLocalStorage())
+  .then(() => loadDataFromDB())
+  .then(() => renderExpenses())
+  .catch(err => console.error("Critical architecture initialization failed: ", err));
